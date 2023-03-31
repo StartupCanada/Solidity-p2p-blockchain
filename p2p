@@ -1,0 +1,90 @@
+pragma solidity >=0.8.0 <0.9.0;
+
+contract EnergyTrading {
+    struct Transaction {
+        address sender;
+        address receiver;
+        uint amount;
+        bool approved;
+    }
+
+    struct User {
+        uint balance;
+        uint energy;
+        Transaction[] transactions;
+        mapping(address => bool) allowed_users;
+    }
+
+    mapping(address => User) public users;
+    address[] public userAddresses;
+    uint public transactionCount;
+    uint public energyPrice = 1;
+
+    event TransactionCreated(address sender, address receiver, uint amount);
+    event TransactionApproved(address sender, address receiver, uint amount);
+
+    function addUser(address user) public {
+        require(users[user].balance == 0 && users[user].energy == 0, "User already exists");
+        users[user] = User({
+            balance: 1000,
+            energy: 0,
+            transactions: new Transaction[](0)
+        });
+        userAddresses.push(user);
+    }
+
+    function buyEnergy(address seller, uint amount) public {
+        require(users[msg.sender].balance >= energyPrice * amount, "Insufficient funds");
+        users[msg.sender].balance -= energyPrice * amount;
+        users[msg.sender].energy += amount;
+        Transaction memory transaction = Transaction({
+            sender: msg.sender,
+            receiver: seller,
+            amount: amount,
+            approved: false
+        });
+        users[msg.sender].transactions.push(transaction);
+        transactionCount++;
+        emit TransactionCreated(msg.sender, seller, amount);
+    }
+
+    function sellEnergy(address buyer, uint amount) public {
+        require(users[msg.sender].energy >= amount, "Insufficient energy");
+        users[msg.sender].energy -= amount;
+        users[msg.sender].balance += energyPrice * amount;
+        Transaction memory transaction = Transaction({
+            sender: msg.sender,
+            receiver: buyer,
+            amount: amount,
+            approved: false
+        });
+        users[msg.sender].transactions.push(transaction);
+        transactionCount++;
+        emit TransactionCreated(msg.sender, buyer, amount);
+    }
+
+    function approveTransaction(uint index) public {
+        require(index < users[msg.sender].transactions.length, "Transaction does not exist");
+        Transaction storage transaction = users[msg.sender].transactions[index];
+        require(transaction.receiver == msg.sender, "Sender does not match");
+        require(transaction.approved == false, "Transaction already approved");
+        transaction.approved = true;
+        users[transaction.sender].energy -= transaction.amount;
+        users[transaction.receiver].energy += transaction.amount;
+        users[transaction.sender].balance += energyPrice * transaction.amount;
+        users[transaction.receiver].balance -= energyPrice * transaction.amount;
+        emit TransactionApproved(transaction.sender, transaction.receiver, transaction.amount);
+    }
+
+    function setEnergyPrice(uint price) public {
+        energyPrice = price;
+    }
+
+    function getAllowedUsers() public view returns (address[] memory) {
+        return userAddresses;
+    }
+
+    function getTransactions(address user) public view returns (Transaction[] memory) {
+        return users[user].transactions;
+    }
+}
